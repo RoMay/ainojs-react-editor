@@ -1,0 +1,25 @@
+{
+  "name": "ainojs-react-editor",
+  "version": "1.0.0",
+  "description": "WYSIWYG editor for React",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aino/ainojs-react-editor"
+  },
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/aino/ainojs-react-editor/issues"
+  },
+  "homepage": "https://github.com/aino/ainojs-react-editor",
+  "main": "react-editor.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Aino",
+  "devDependencies": {
+    "envify": "^1.2.1",
+    "react": "latest"
+  },
+  "dependencies": {
+  }
+}

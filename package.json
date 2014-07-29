@@ -20,5 +20,7 @@
     "envify": "^1.2.1",
     "react": "latest"
   },
-  "dependencies": {}
+  "dependencies": {
+    "ainojs-detect": "latest"
+  }
 }

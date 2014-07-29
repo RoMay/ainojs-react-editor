@@ -22,6 +22,37 @@ var getSelectionStart = function() {
   return node && node.nodeType === 3 ? node.parentNode : node
 }
 
+var getSelectionElement = function() {
+  var selection = document.getSelection()
+  var range = selection.getRangeAt(0)
+  var current = range.commonAncestorContainer
+  var parent = current.parentNode
+  var result
+  var getEditorElement = function(e) {
+    var parent = e
+    try {
+      while (!parent.getAttribute('data-editor'))
+        parent = parent.parentNode
+    } catch (errb) {
+        return false
+    }
+    return parent
+  }
+
+  // First try on current node
+  try {
+    if (current.getAttribute('data-editor')) {
+      result = current
+    } else {
+      result = getEditorElement(parent)
+    }
+    // If not search in the parent nodes.
+  } catch (err) {
+    result = getEditorElement(parent)
+  }
+  return result
+}
+
 var insertNode = function(nodeType) {
   var selection = document.getSelection()
   var range = selection.getRangeAt(0)
@@ -35,14 +66,66 @@ var insertNode = function(nodeType) {
 
 module.exports = React.createClass({
   getInitialState: function() {
-    return { html: ''}
+    return {
+      html: '',
+      keepToolbarAlive: false,
+      toolbar: false
+    }
+  },
+  selection: '',
+  selectionRange: null,
+  getElement: function() {
+    return this.refs.editor.getDOMNode()
+  },
+  checkSelection: function() {
+
+    var newSelection
+    var selectionElement
+
+    // tick the selection check
+    setTimeout(function() {
+      
+      if ( this.state.keepToolbarAlive !== true ) {
+
+        newSelection = document.getSelection()
+
+        if ( !newSelection.toString().trim() )
+          this.hideToolbar()
+        else {
+          selectionElement = getSelectionElement()
+          if ( !selectionElement )
+            this.hideToolbar()
+          else {
+            this.selection = newSelection
+            this.selectionRange = this.selection.getRangeAt(0)
+            if ( this.getElement() === selectionElement ) {
+              this.showToolbar()
+              return
+            }
+            this.hideToolbar()
+          }
+        }
+      }
+    }.bind(this), 4)
   },
   componentDidMount: function() {
     // remove the react bindings and re-insert the markup as plain HTML
-    var node = this.getDOMNode()
+    var node = this.getElement()
     var html = node.innerHTML.replace(/\s?data-reactid=\"[^\"]+\"/g,'')
     node.innerHTML = html
+    node.setAttribute('data-editor', 'true')
     this.setState({ html: html })
+    document.documentElement.addEventListener('mouseup', this.checkSelection)
+  },
+  hideToolbar: function() {
+    this.setState({
+      toolbar: false
+    })
+  },
+  showToolbar: function() {
+    this.setState({
+      toolbar: true
+    })
   },
   onKeyUp: function(e) {
     var node = getSelectionStart()
@@ -63,6 +146,7 @@ module.exports = React.createClass({
       if ( node.tagName == 'A' )
         document.execCommand('unlink', false, null)
     }
+    this.checkSelection()
   },
   onKeyDown: function(e) {
 
@@ -85,11 +169,15 @@ module.exports = React.createClass({
     }
   },
   onChange: function() {
-    var html = this.getDOMNode().innerHTML
+    var html = this.getElement().innerHTML
     if ( html != this.state.html ) {
       this.setState({ html: html })
       typeof this.props.onChange == 'function' && this.props.onChange(html)
     }
+  },
+  onBlur: function() {
+    this.checkSelection()
+    this.onChange()
   },
   onPaste: function(e) {
     e.preventDefault()
@@ -97,17 +185,38 @@ module.exports = React.createClass({
     var content = clipboard.getData('text/plain') || clipboard.getData('text/html')
     document.execCommand('insertHTML', false, toHTML(content))
   },
+  onToolbarClick: function(e) {
+    var action = e.target.getAttribute('data-action')
+    this.execFormatBlock(action)
+  },
+  execFormatBlock: function (action) {
+    document.execCommand(action, false, null)
+  },
   render: function() {
-    return this.transferPropsTo(
-      <div className="editor" 
+    var editor = this.transferPropsTo(
+      <div className="editor"
+        ref="editor"
         contentEditable 
         onInput={this.onChange} 
-        onBlur={this.onChange} 
+        onBlur={this.onBlur} 
         onPaste={this.onPaste}
         onKeyUp={this.onKeyUp}
         onKeyDown={this.onKeyDown}
       >
         {this.props.children}
+      </div>
+    )
+    var toolbarStyles = {
+      display: this.state.toolbar ? 'block' : 'none',
+      position:'absolute'
+    }
+    return (
+      <div className="editor-wrapper">
+        <div className="editor-toolbar" ref="toolbar" onClick={this.onToolbarClick} style={toolbarStyles}>
+          <button className="bold" data-action="bold">Bold</button>
+          <button className="italic" data-action="italic">Italic</button>
+        </div>
+        {editor}
       </div>
     )
   }

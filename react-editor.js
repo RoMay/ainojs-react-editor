@@ -9,8 +9,8 @@ var toHTML = function(text) {
   div.innerHTML = text.replace(/\t/g,'    ').replace(/[^\S\n]{2}/g,'&nbsp; ');
 
   var parsed = div.innerText || div.textContent
-
   var arr = parsed.split(/[\r\n]/g)
+
   return arr.join('<br>')
     .replace('<br><br>','</p><p>')
     .replace('<br></p>','</p>')

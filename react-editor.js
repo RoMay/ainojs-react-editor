@@ -2,6 +2,9 @@
 
 var React = require('react')
 var Detect = require('ainojs-detect')
+var Dimensions = require('ainojs-dimensions')
+
+var blockTags = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'pre']
 
 var toHTML = function(text) {
 
@@ -15,6 +18,21 @@ var toHTML = function(text) {
     .replace('<br><br>','</p><p>')
     .replace('<br></p>','</p>')
     .replace('<p><br>','<p>')
+}
+
+var getSelectionData = function(el) {
+  var tagName
+
+  if (el && el.tagName)
+    tagName = el.tagName.toLowerCase()
+
+  while (el && blockTags.indexOf(tagName) === -1) {
+    el = el.parentNode
+    if (el && el.tagName)
+      tagName = el.tagName.toLowerCase()
+  }
+
+  return el
 }
 
 var getSelectionStart = function() {
@@ -69,7 +87,10 @@ module.exports = React.createClass({
     return {
       html: '',
       keepToolbarAlive: false,
-      toolbar: false
+      toolStyles: {},
+      arrowLeft: 0,
+      arrowTop: 0,
+      arrowClass: 'top'
     }
   },
   selection: '',
@@ -108,7 +129,9 @@ module.exports = React.createClass({
       }
     }.bind(this), 4)
   },
+  toolbarDimensions: {},
   componentDidMount: function() {
+
     // remove the react bindings and re-insert the markup as plain HTML
     var node = this.getElement()
     var html = node.innerHTML.replace(/\s?data-reactid=\"[^\"]+\"/g,'')
@@ -116,16 +139,69 @@ module.exports = React.createClass({
     node.setAttribute('data-editor', 'true')
     this.setState({ html: html })
     document.documentElement.addEventListener('mouseup', this.checkSelection)
+
+    // save dimensions for toolbar
+    var toolbar = this.refs.toolbar.getDOMNode()
+    this.setState({
+      toolStyles: {
+        opacity: 0,
+        display: 'block'
+      }
+    })
+    this.toolbarDimensions = Dimensions(toolbar)
+    this.setState({
+      toolStyles: {
+        opacity: 1,
+        display: 'none'
+      }
+    })
+  },
+  componentWillUnmount: function() {
+    document.documentElement.removeEventListener('mouseup', this.checkSelection)
   },
   hideToolbar: function() {
     this.setState({
-      toolbar: false
+      toolStyles: { display: 'none' }
     })
   },
   showToolbar: function() {
+    var pos = this.getToolbarPosition()
     this.setState({
-      toolbar: true
+      toolStyles: {
+        display: 'block',
+        opacity: 1,
+        top: pos.top,
+        left: pos.left
+      },
+      arrowTop: pos.arrowTop,
+      arrowLeft: pos.arrowLeft
     })
+  },
+  getToolbarPosition: function() {
+    var dim = this.toolbarDimensions
+    var containerRect = this.getElement().getBoundingClientRect()
+    var cleft = containerRect.left
+    var sel = document.getSelection()
+    var range = sel.getRangeAt(0)
+    var selection = range.getBoundingClientRect()
+    var top = selection.top - containerRect.top
+    var left = selection.left - cleft
+    var isUnder = top < dim.height + 10
+    var center = (selection.left + selection.width/2) - dim.width/2
+    var arrDiff = 0
+    if ( center-cleft < -cleft )
+      arrDiff = center
+
+    this.setState({ arrowClass: isUnder ? 'bottom' : 'top' })
+
+    return {
+      top: isUnder ?
+        top + selection.height + 10 :
+        top - dim.height - 10,
+      left: Math.max(-cleft, center-cleft),
+      arrowTop: isUnder ? -8 : dim.height,
+      arrowLeft: (dim.width/2-7) + arrDiff
+    }
   },
   onKeyUp: function(e) {
     var node = getSelectionStart()
@@ -137,7 +213,7 @@ module.exports = React.createClass({
       return false
 
     // fix safari’s paragraph creation
-    if ( Detect.safari && node.textContent === '' )
+    if ( Detect.safari && node.textContent === '' && node.tagName != 'LI' )
       document.execCommand('formatBlock', false, 'p')
 
     // make sure linebreaks converts to new paragraph
@@ -167,6 +243,7 @@ module.exports = React.createClass({
         insertNode('br')
       this.onChange()
     }
+
   },
   onChange: function() {
     var html = this.getElement().innerHTML
@@ -187,9 +264,15 @@ module.exports = React.createClass({
   },
   onToolbarClick: function(e) {
     var action = e.target.getAttribute('data-action')
-    this.execFormatBlock(action)
+    this.execFormat(action)
   },
-  execFormatBlock: function (action) {
+  execFormat: function(action) {
+    var selectionData = getSelectionData(this.selection.anchorNode)
+    if ( blockTags.indexOf(action) != -1 ) {
+      if (selectionData.tagName === action.toUpperCase())
+        action = 'p'
+      document.execCommand('formatBlock', false, action)
+    }
     document.execCommand(action, false, null)
   },
   render: function() {
@@ -206,15 +289,21 @@ module.exports = React.createClass({
         {this.props.children}
       </div>
     )
-    var toolbarStyles = {
-      display: this.state.toolbar ? 'block' : 'none',
-      position:'absolute'
+    var toolbarStyles = this.state.toolStyles
+    var arrowStyles = {
+      top: this.state.arrowTop,
+      left: this.state.arrowLeft
     }
+    var arrowClasses = ['arr'].concat([this.state.arrowClass]).join(' ')
     return (
-      <div className="editor-wrapper">
-        <div className="editor-toolbar" ref="toolbar" onClick={this.onToolbarClick} style={toolbarStyles}>
-          <button className="bold" data-action="bold">Bold</button>
-          <button className="italic" data-action="italic">Italic</button>
+      <div className="aino-editor" style={{ position: 'relative' }}>
+        <div className="toolbar" ref="toolbar" onClick={this.onToolbarClick} style={toolbarStyles}>
+          <button className="bold" data-action="bold">B</button>
+          <button className="italic" data-action="italic">i</button>
+          <button className="h1" data-action="h1">h1</button>
+          <button className="h2" data-action="h2">h2</button>
+          <button className="list" data-action="insertunorderedlist">li</button>
+          <span className={arrowClasses} style={arrowStyles}/>
         </div>
         {editor}
       </div>

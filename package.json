@@ -21,6 +21,7 @@
     "react": "latest"
   },
   "dependencies": {
-    "ainojs-detect": "latest"
+    "ainojs-detect": "latest",
+    "ainojs-dimensions": "latest"
   }
 }

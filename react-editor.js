@@ -6,6 +6,11 @@ var Dimensions = require('ainojs-dimensions')
 
 var blockTags = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'pre']
 
+var extend = function(o1, o2) {
+  for( var i in o2)
+    o1[i] = o2[i]
+}
+
 var toHTML = function(text) {
 
   var div = document.createElement('div')
@@ -20,7 +25,7 @@ var toHTML = function(text) {
     .replace('<p><br>','<p>')
 }
 
-var getSelectionData = function(el) {
+var getSelectionBlockElement = function(el) {
   var tagName
 
   if (el && el.tagName)
@@ -40,7 +45,7 @@ var getSelectionStart = function() {
   return node && node.nodeType === 3 ? node.parentNode : node
 }
 
-var getSelectionElement = function() {
+var selectionInEditor = function() {
   var selection = document.getSelection()
   var range = selection.getRangeAt(0)
   var current = range.commonAncestorContainer
@@ -54,7 +59,7 @@ var getSelectionElement = function() {
     } catch (errb) {
         return false
     }
-    return parent
+    return !!parent
   }
 
   // First try on current node
@@ -68,7 +73,7 @@ var getSelectionElement = function() {
   } catch (err) {
     result = getEditorElement(parent)
   }
-  return result
+  return !!result
 }
 
 var insertNode = function(nodeType) {
@@ -90,7 +95,8 @@ module.exports = React.createClass({
       toolStyles: {display: 'none'},
       arrowLeft: 0,
       arrowTop: 0,
-      arrowClass: 'top'
+      toolbarBelow: false,
+      toolbarMode: ''
     }
   },
   selection: '',
@@ -110,21 +116,12 @@ module.exports = React.createClass({
 
         newSelection = document.getSelection()
 
-        if ( !newSelection.toString().trim() )
+        if ( !newSelection.toString().trim() || !selectionInEditor() )
           this.hideToolbar()
         else {
-          selectionElement = getSelectionElement()
-          if ( !selectionElement )
-            this.hideToolbar()
-          else {
-            this.selection = newSelection
-            this.selectionRange = this.selection.getRangeAt(0)
-            if ( this.getElement() === selectionElement ) {
-              this.showToolbar()
-              return
-            }
-            this.hideToolbar()
-          }
+          this.selection = newSelection
+          this.selectionRange = this.selection.getRangeAt(0)
+          this.showToolbar()
         }
       }
     }.bind(this), 4)
@@ -148,6 +145,9 @@ module.exports = React.createClass({
     })
   },
   showToolbar: function() {
+    var block = getSelectionBlockElement(document.getSelection().anchorNode)
+    this.setState({ toolbarMode: ( /^(H1|H2|H3|H4|H5|H6)$/.test(block.nodeName) ) ? 'heading' : '' })
+      
     var pos = this.getToolbarPosition()
     this.setState({
       toolStyles: {
@@ -178,12 +178,12 @@ module.exports = React.createClass({
     var isUnder = selection.top < dim.height + 10
     var center = (selection.left + selection.width/2) - dim.width/2
     var arrDiff = 0
-    var selectionData = getSelectionData(sel.anchorNode)
+    var selectionData = getSelectionBlockElement(sel.anchorNode)
 
     if ( center-cleft < -cleft )
       arrDiff = center
 
-    this.setState({ arrowClass: isUnder ? 'bottom' : 'top' })
+    this.setState({ toolbarBelow: isUnder })
 
     return {
       top: isUnder ?
@@ -258,12 +258,14 @@ module.exports = React.createClass({
     this.execFormat(action)
   },
   execFormat: function(action) {
-    var selectionData = getSelectionData(this.selection.anchorNode)
+    var selectionElement = getSelectionBlockElement(this.selection.anchorNode)
     if ( blockTags.indexOf(action) != -1 ) {
-      if (selectionData.tagName === action.toUpperCase())
+      if (selectionElement.tagName === action.toUpperCase())
         action = 'p'
       document.execCommand('formatBlock', false, action)
     }
+    if( action == 'justifycenter' && selectionElement.style.textAlign=='center' )
+      action = 'justifyleft'
     document.execCommand(action, false, null)
   },
   render: function() {
@@ -285,16 +287,21 @@ module.exports = React.createClass({
       top: this.state.arrowTop,
       left: this.state.arrowLeft
     }
-    var arrowClasses = ['arr'].concat([this.state.arrowClass]).join(' ')
+    var toolbarClasses = ['toolbar'].concat([this.state.toolbarMode])
+    if ( !this.state.toolbarBelow )
+      toolbarClasses.push('top')
+
     return this.transferPropsTo(
       <div className="aino-editor" style={{ position: 'relative' }}>
-        <div className="toolbar" ref="toolbar" onClick={this.onToolbarClick} style={toolbarStyles}>
+        <div className={toolbarClasses.join(' ')} ref="toolbar" onClick={this.onToolbarClick} style={toolbarStyles}>
           <button className="bold" data-action="bold">B</button>
           <button className="italic" data-action="italic">i</button>
           <button className="h1" data-action="h1">h1</button>
           <button className="h2" data-action="h2">h2</button>
+          <button className="h3" data-action="h3">h3</button>
+          <button className="center" data-action="justifycenter">+</button>
           <button className="list" data-action="insertunorderedlist">li</button>
-          <span className={arrowClasses} style={arrowStyles}/>
+          <span className="arr" style={arrowStyles}/>
         </div>
         {editor}
       </div>

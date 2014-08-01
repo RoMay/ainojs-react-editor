@@ -87,7 +87,7 @@ module.exports = React.createClass({
     return {
       html: '',
       keepToolbarAlive: false,
-      toolStyles: {},
+      toolStyles: {display: 'none'},
       arrowLeft: 0,
       arrowTop: 0,
       arrowClass: 'top'
@@ -129,7 +129,6 @@ module.exports = React.createClass({
       }
     }.bind(this), 4)
   },
-  toolbarDimensions: {},
   componentDidMount: function() {
 
     // remove the react bindings and re-insert the markup as plain HTML
@@ -139,22 +138,6 @@ module.exports = React.createClass({
     node.setAttribute('data-editor', 'true')
     this.setState({ html: html })
     document.documentElement.addEventListener('mouseup', this.checkSelection)
-
-    // save dimensions for toolbar
-    var toolbar = this.refs.toolbar.getDOMNode()
-    this.setState({
-      toolStyles: {
-        opacity: 0,
-        display: 'block'
-      }
-    })
-    this.toolbarDimensions = Dimensions(toolbar)
-    this.setState({
-      toolStyles: {
-        opacity: 1,
-        display: 'none'
-      }
-    })
   },
   componentWillUnmount: function() {
     document.documentElement.removeEventListener('mouseup', this.checkSelection)
@@ -178,7 +161,13 @@ module.exports = React.createClass({
     })
   },
   getToolbarPosition: function() {
-    var dim = this.toolbarDimensions
+    this.setState({
+      toolStyles: { opacity: 0, display: 'block' }
+    })
+    var dim = Dimensions(this.refs.toolbar.getDOMNode())
+    this.setState({
+      toolStyles: { opacity: 1 }
+    })
     var containerRect = this.getElement().getBoundingClientRect()
     var cleft = containerRect.left
     var sel = document.getSelection()
@@ -186,9 +175,11 @@ module.exports = React.createClass({
     var selection = range.getBoundingClientRect()
     var top = selection.top - containerRect.top
     var left = selection.left - cleft
-    var isUnder = top < dim.height + 10
+    var isUnder = selection.top < dim.height + 10
     var center = (selection.left + selection.width/2) - dim.width/2
     var arrDiff = 0
+    var selectionData = getSelectionData(sel.anchorNode)
+
     if ( center-cleft < -cleft )
       arrDiff = center
 
@@ -199,7 +190,7 @@ module.exports = React.createClass({
         top + selection.height + 10 :
         top - dim.height - 10,
       left: Math.max(-cleft, center-cleft),
-      arrowTop: isUnder ? -8 : dim.height,
+      arrowTop: isUnder ? -6 : dim.height,
       arrowLeft: (dim.width/2-7) + arrDiff
     }
   },
@@ -276,7 +267,7 @@ module.exports = React.createClass({
     document.execCommand(action, false, null)
   },
   render: function() {
-    var editor = this.transferPropsTo(
+    var editor = (
       <div className="editor"
         ref="editor"
         contentEditable 
@@ -295,7 +286,7 @@ module.exports = React.createClass({
       left: this.state.arrowLeft
     }
     var arrowClasses = ['arr'].concat([this.state.arrowClass]).join(' ')
-    return (
+    return this.transferPropsTo(
       <div className="aino-editor" style={{ position: 'relative' }}>
         <div className="toolbar" ref="toolbar" onClick={this.onToolbarClick} style={toolbarStyles}>
           <button className="bold" data-action="bold">B</button>

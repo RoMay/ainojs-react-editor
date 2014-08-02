@@ -6,9 +6,12 @@ var Dimensions = require('ainojs-dimensions')
 
 var blockTags = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'pre']
 
+var linkinputValue = ''
+
 var extend = function(o1, o2) {
   for( var i in o2)
     o1[i] = o2[i]
+  return o1
 }
 
 var toHTML = function(text) {
@@ -87,32 +90,69 @@ var insertNode = function(nodeType) {
   return node
 }
 
+var saved
+
+var saveSelection = function() {
+  var i = 0
+  var sel = document.getSelection()
+  var len = sel.rangeCount
+  var ranges
+  if (sel.getRangeAt && sel.rangeCount) {
+    ranges = []
+    for (; i < len; i++)
+      ranges.push(sel.getRangeAt(i))
+
+    saved = ranges
+  }
+}
+
+var restoreSelection = function() {
+  if ( !saved )
+    return
+  var i = 0
+  var len = saved.length
+  var sel = document.getSelection()
+  sel.removeAllRanges()
+  for (; i < len; i++)
+    sel.addRange(saved[i])
+}
+
 module.exports = React.createClass({
   getInitialState: function() {
     return {
       html: '',
       keepToolbarAlive: false,
       toolStyles: {display: 'none'},
+      linkInputStyles: {display: 'none'},
       arrowLeft: 0,
       arrowTop: 0,
       toolbarBelow: false,
-      toolbarMode: ''
+      toolbarMode: 'default',
+      linkMode: false
     }
   },
+
   selection: '',
   selectionRange: null,
   getElement: function() {
     return this.refs.editor.getDOMNode()
   },
-  checkSelection: function() {
+  checkSelection: function(e) {
 
     var newSelection
     var selectionElement
 
+    if( e && this.state.linkMode ) {
+      if ( e.target == this.refs.linkinput.getDOMNode() )
+        return
+      else
+        this.createLink()
+    }
+
     // tick the selection check
     setTimeout(function() {
       
-      if ( this.state.keepToolbarAlive !== true ) {
+      if ( !this.state.linkMode ) {
 
         newSelection = document.getSelection()
 
@@ -126,17 +166,27 @@ module.exports = React.createClass({
       }
     }.bind(this), 4)
   },
+  createLink: function() {
+    this.setState({ 
+      linkMode: false,
+      linkinputStyles: { display: 'none' }
+    })
+    restoreSelection()
+    if ( linkinputValue )
+      document.execCommand('createLink', false, linkinputValue)
+    else
+      document.execCommand('unlink', false, null)
+  },
   componentDidMount: function() {
 
     // remove the react bindings and re-insert the markup as plain HTML
     var node = this.getElement()
     var html = node.innerHTML.replace(/\s?data-reactid=\"[^\"]+\"/g,'')
     node.innerHTML = html
-    node.setAttribute('data-editor', 'true')
     this.setState({ html: html })
     document.documentElement.addEventListener('mouseup', this.checkSelection)
   },
-  componentWillUnmount: function() {
+  componentWillUnmount: function() {s
     document.documentElement.removeEventListener('mouseup', this.checkSelection)
   },
   hideToolbar: function() {
@@ -145,8 +195,11 @@ module.exports = React.createClass({
     })
   },
   showToolbar: function() {
+
     var block = getSelectionBlockElement(document.getSelection().anchorNode)
-    this.setState({ toolbarMode: ( /^(H1|H2|H3|H4|H5|H6)$/.test(block.nodeName) ) ? 'heading' : '' })
+    this.setState({
+      toolbarMode: ( /^(H1|H2|H3|H4|H5|H6)$/.test(block.nodeName) ) ? 'heading' : 'default' 
+    })
       
     var pos = this.getToolbarPosition()
     this.setState({
@@ -160,14 +213,18 @@ module.exports = React.createClass({
       arrowLeft: pos.arrowLeft
     })
   },
-  getToolbarPosition: function() {
+  getToolbarDimensions: function() {
     this.setState({
-      toolStyles: { opacity: 0, display: 'block' }
+      toolStyles: extend( this.state.toolStyles, { opacity: 0, display: 'block' })
     })
     var dim = Dimensions(this.refs.toolbar.getDOMNode())
     this.setState({
-      toolStyles: { opacity: 1 }
+      toolStyles: extend( this.state.toolStyles, { opacity: 1 })
     })
+    return dim
+  },
+  getToolbarPosition: function() {
+    var dim = this.getToolbarDimensions()
     var containerRect = this.getElement().getBoundingClientRect()
     var cleft = containerRect.left
     var sel = document.getSelection()
@@ -255,7 +312,35 @@ module.exports = React.createClass({
   },
   onToolbarClick: function(e) {
     var action = e.target.getAttribute('data-action')
-    this.execFormat(action)
+    if ( action )
+      this.execFormat(action)
+    if ( e.target.getAttribute('data-link') ) {
+      saveSelection()
+      var anchor = getSelectionStart()
+      if ( anchor.nodeName == 'A' )
+        linkinputValue = anchor.getAttribute('href')
+      else
+        linkinputValue = ''
+      this.setState({ 
+        linkMode: true,
+        linkinputStyles: {
+          display: 'block',
+          width: this.getToolbarDimensions().width
+        }
+      })
+      setTimeout(function() {
+        var anchor = this.refs.linkinput.getDOMNode()
+        anchor.value = linkinputValue
+        anchor.focus()
+      }.bind(this), 4)
+    }
+  },
+  onLinkinputChange: function(e) {
+    linkinputValue = e.target.value
+  },
+  onLinkinputKeyUp: function(e) {
+    if ( e.which == 13 )
+      this.createLink()
   },
   execFormat: function(action) {
     var selectionElement = getSelectionBlockElement(this.selection.anchorNode)
@@ -278,30 +363,51 @@ module.exports = React.createClass({
         onPaste={this.onPaste}
         onKeyUp={this.onKeyUp}
         onKeyDown={this.onKeyDown}
+        data-editor="true"
       >
         {this.props.children}
       </div>
     )
     var toolbarStyles = this.state.toolStyles
+    var linkinputStyles = this.state.linkinputStyles
     var arrowStyles = {
       top: this.state.arrowTop,
       left: this.state.arrowLeft
     }
     var toolbarClasses = ['toolbar'].concat([this.state.toolbarMode])
+    if ( this.state.linkMode )
+      toolbarClasses.push('link')
     if ( !this.state.toolbarBelow )
       toolbarClasses.push('top')
+
+    var isActive = function(nodeName) {
+      var parentNode = getSelectionStart()
+      if ( !parentNode || !parentNode.tagName )
+        return ''
+      while (parentNode.tagName && !parentNode.getAttribute('data-editor') ) {
+        if ( parentNode.tagName.toLowerCase() == nodeName || ( nodeName == 'center' && parentNode.style.textAlign == 'center' ) )
+          return ' active'
+        parentNode = parentNode.parentNode
+      }
+      return ''
+    }
 
     return this.transferPropsTo(
       <div className="aino-editor" style={{ position: 'relative' }}>
         <div className={toolbarClasses.join(' ')} ref="toolbar" onClick={this.onToolbarClick} style={toolbarStyles}>
-          <button className="bold" data-action="bold">B</button>
-          <button className="italic" data-action="italic">i</button>
-          <button className="h1" data-action="h1">h1</button>
-          <button className="h2" data-action="h2">h2</button>
-          <button className="h3" data-action="h3">h3</button>
-          <button className="center" data-action="justifycenter">+</button>
-          <button className="list" data-action="insertunorderedlist">li</button>
+          <button className={"bold"+isActive('b')} data-action="bold">B</button>
+          <button className={"italic"+isActive('i')} data-action="italic">i</button>
+          <button className={"h1"+isActive('h1')} data-action="h1">h1</button>
+          <button className={"h2"+isActive('h2')} data-action="h2">h2</button>
+          <button className={"h3"+isActive('h3')} data-action="h3">h3</button>
+          <button className={"center"+isActive('center')} data-action="justifycenter">+</button>
+          <button className={"list"+isActive('li')} data-action="insertunorderedlist">li</button>
+          <button className={"link"+isActive('a')} data-link>a</button>
           <span className="arr" style={arrowStyles}/>
+          <div className="linkinput" style={linkinputStyles}>
+            <input type="text" ref="linkinput" onInput={this.onLinkinputChange} onKeyUp={this.onLinkinputKeyUp} placeholder="Paste or type a link" />
+            <span className="close" />
+          </div>
         </div>
         {editor}
       </div>

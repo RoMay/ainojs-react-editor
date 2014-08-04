@@ -28,7 +28,7 @@ var toHTML = function(text) {
     .replace('<p><br>','<p>')
 }
 
-var getSelectionBlockElement = function(el) {
+var getBlockElement = function(el) {
   var tagName
 
   if (el && el.tagName)
@@ -49,34 +49,10 @@ var getSelectionStart = function() {
 }
 
 var selectionInEditor = function() {
-  var selection = document.getSelection()
-  var range = selection.getRangeAt(0)
-  var current = range.commonAncestorContainer
-  var parent = current.parentNode
-  var result
-  var getEditorElement = function(e) {
-    var parent = e
-    try {
-      while (!parent.getAttribute('data-editor'))
-        parent = parent.parentNode
-    } catch (errb) {
-        return false
-    }
-    return !!parent
-  }
-
-  // First try on current node
-  try {
-    if (current.getAttribute('data-editor')) {
-      result = current
-    } else {
-      result = getEditorElement(parent)
-    }
-    // If not search in the parent nodes.
-  } catch (err) {
-    result = getEditorElement(parent)
-  }
-  return !!result
+  var node = getSelectionStart()
+  while( node.tagName && !node.getAttribute('data-editor') )
+    node = node.parentNode
+  return node !== document
 }
 
 var insertNode = function(nodeType) {
@@ -121,7 +97,6 @@ module.exports = React.createClass({
   getInitialState: function() {
     return {
       html: '',
-      keepToolbarAlive: false,
       toolStyles: {display: 'none'},
       linkInputStyles: {display: 'none'},
       arrowLeft: 0,
@@ -172,8 +147,11 @@ module.exports = React.createClass({
       linkinputStyles: { display: 'none' }
     })
     restoreSelection()
-    if ( linkinputValue )
+    if ( linkinputValue ) {
+      if (! (/^([a-zA-Z0-9+.-]+:\/\/|\/)/ ).test(linkinputValue) )
+        linkinputValue = 'http://'+linkinputValue
       document.execCommand('createLink', false, linkinputValue)
+    }
     else
       document.execCommand('unlink', false, null)
   },
@@ -196,7 +174,7 @@ module.exports = React.createClass({
   },
   showToolbar: function() {
 
-    var block = getSelectionBlockElement(document.getSelection().anchorNode)
+    var block = getBlockElement(document.getSelection().anchorNode)
     this.setState({
       toolbarMode: ( /^(H1|H2|H3|H4|H5|H6)$/.test(block.nodeName) ) ? 'heading' : 'default' 
     })
@@ -226,7 +204,7 @@ module.exports = React.createClass({
   getToolbarPosition: function() {
     var dim = this.getToolbarDimensions()
     var containerRect = this.getElement().getBoundingClientRect()
-    var cleft = containerRect.left
+    var cleft = containerRect.left-4
     var sel = document.getSelection()
     var range = sel.getRangeAt(0)
     var selection = range.getBoundingClientRect()
@@ -235,7 +213,7 @@ module.exports = React.createClass({
     var isUnder = selection.top < dim.height + 10
     var center = (selection.left + selection.width/2) - dim.width/2
     var arrDiff = 0
-    var selectionData = getSelectionBlockElement(sel.anchorNode)
+    var selectionData = getBlockElement(sel.anchorNode)
 
     if ( center-cleft < -cleft )
       arrDiff = center
@@ -343,15 +321,19 @@ module.exports = React.createClass({
       this.createLink()
   },
   execFormat: function(action) {
-    var selectionElement = getSelectionBlockElement(this.selection.anchorNode)
+    var selectionElement = getBlockElement(this.selection.anchorNode)
     if ( blockTags.indexOf(action) != -1 ) {
       if (selectionElement.tagName === action.toUpperCase())
         action = 'p'
       document.execCommand('formatBlock', false, action)
     }
-    if( action == 'justifycenter' && selectionElement.style.textAlign=='center' )
-      action = 'justifyleft'
-    document.execCommand(action, false, null)
+    if( action == 'justifycenter' && selectionElement.style.textAlign=='center' ) {
+      selectionElement.style.textAlign = ''
+      if ( selectionElement.getAttribute('style') === null )
+        selectionElement.removeAttribute('style')
+      this.onChange()
+    } else
+      document.execCommand(action, false, null)
   },
   render: function() {
     var editor = (
@@ -380,17 +362,22 @@ module.exports = React.createClass({
     if ( !this.state.toolbarBelow )
       toolbarClasses.push('top')
 
-    var isActive = function(nodeName) {
+    var isActive = (function() {
       var parentNode = getSelectionStart()
-      if ( !parentNode || !parentNode.tagName )
-        return ''
-      while (parentNode.tagName && !parentNode.getAttribute('data-editor') ) {
-        if ( parentNode.tagName.toLowerCase() == nodeName || ( nodeName == 'center' && parentNode.style.textAlign == 'center' ) )
-          return ' active'
-        parentNode = parentNode.parentNode
+      var tags = []
+      if ( parentNode && parentNode.tagName ) {
+        while (parentNode.tagName && !parentNode.getAttribute('data-editor') ) {
+          if ( parentNode.style.textAlign == 'center' )
+            tags.push('center')
+          else
+            tags.push(parentNode.tagName)
+          parentNode = parentNode.parentNode
+        }
       }
-      return ''
-    }
+      return function(nodeName) {
+        return tags.indexOf(nodeName.toUpperCase()) != -1 ? ' active':''
+      }
+    }())
 
     return this.transferPropsTo(
       <div className="aino-editor" style={{ position: 'relative' }}>

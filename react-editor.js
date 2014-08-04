@@ -50,6 +50,8 @@ var getSelectionStart = function() {
 
 var selectionInEditor = function() {
   var node = getSelectionStart()
+  if ( !node )
+    return false
   while( node.tagName && !node.getAttribute('data-editor') )
     node = node.parentNode
   return node !== document
@@ -99,6 +101,7 @@ module.exports = React.createClass({
       html: '',
       toolStyles: {display: 'none'},
       linkInputStyles: {display: 'none'},
+      injectStyles: {display: 'none'},
       arrowLeft: 0,
       arrowTop: 0,
       toolbarBelow: false,
@@ -107,8 +110,7 @@ module.exports = React.createClass({
     }
   },
 
-  selection: '',
-  selectionRange: null,
+  selection: null,
   getElement: function() {
     return this.refs.editor.getDOMNode()
   },
@@ -135,8 +137,23 @@ module.exports = React.createClass({
           this.hideToolbar()
         else {
           this.selection = newSelection
-          this.selectionRange = this.selection.getRangeAt(0)
           this.showToolbar()
+        }
+
+        if ( !newSelection.toString().trim() && selectionInEditor() ) {
+          var cursor = getSelectionStart()
+          if ( cursor && cursor.nodeName == 'P' && /^\s*(<br>)?\s*$/.test(cursor.innerHTML) ) {
+            var pos = cursor.getBoundingClientRect()
+            this.setState({
+              injectStyles: {
+                display: 'block',
+                top: pos.top,
+                left: pos.left
+              }
+            })
+          } else {
+            this.setState({ injectStyles: { display: 'none' } })
+          }
         }
       }
     }.bind(this), 4)
@@ -157,11 +174,11 @@ module.exports = React.createClass({
   },
   componentDidMount: function() {
 
-    // remove the react bindings and re-insert the markup as plain HTML
     var node = this.getElement()
-    var html = node.innerHTML.replace(/\s?data-reactid=\"[^\"]+\"/g,'')
+    var html = this.props.html || ''
     node.innerHTML = html
     this.setState({ html: html })
+
     document.documentElement.addEventListener('mouseup', this.checkSelection)
   },
   componentWillUnmount: function() {s
@@ -174,9 +191,12 @@ module.exports = React.createClass({
   },
   showToolbar: function() {
 
-    var block = getBlockElement(document.getSelection().anchorNode)
+    var start = getBlockElement(document.getSelection().anchorNode)
+    var end = getBlockElement(document.getSelection().focusNode)
+    var reg = /^(H1|H2|H3|H4|H5|H6)$/
+
     this.setState({
-      toolbarMode: ( /^(H1|H2|H3|H4|H5|H6)$/.test(block.nodeName) ) ? 'heading' : 'default' 
+      toolbarMode: reg.test(start.nodeName) || reg.test(end.nodeName) ? 'heading' : 'default' 
     })
       
     var pos = this.getToolbarPosition()
@@ -243,6 +263,7 @@ module.exports = React.createClass({
       document.execCommand('formatBlock', false, 'p')
 
     // make sure linebreaks converts to new paragraph
+    // TODO prevent nested tags
     if ( e.which === 13 && !e.shiftKey && node.tagName != 'LI' ) {
       document.execCommand('formatBlock', false, 'p')
       if ( node.tagName == 'A' )
@@ -289,10 +310,11 @@ module.exports = React.createClass({
     document.execCommand('insertHTML', false, toHTML(content))
   },
   onToolbarClick: function(e) {
-    var action = e.target.getAttribute('data-action')
+    var target = e.target.nodeName == 'BUTTON' ? e.target : e.target.parentNode
+    var action = target.getAttribute('data-action')
     if ( action )
       this.execFormat(action)
-    if ( e.target.getAttribute('data-link') ) {
+    if ( target.getAttribute('data-link') ) {
       saveSelection()
       var anchor = getSelectionStart()
       if ( anchor.nodeName == 'A' )
@@ -347,7 +369,6 @@ module.exports = React.createClass({
         onKeyDown={this.onKeyDown}
         data-editor="true"
       >
-        {this.props.children}
       </div>
     )
     var toolbarStyles = this.state.toolStyles
@@ -356,6 +377,7 @@ module.exports = React.createClass({
       top: this.state.arrowTop,
       left: this.state.arrowLeft
     }
+    var injectStyles = this.state.injectStyles
     var toolbarClasses = ['toolbar'].concat([this.state.toolbarMode])
     if ( this.state.linkMode )
       toolbarClasses.push('link')
@@ -368,9 +390,8 @@ module.exports = React.createClass({
       if ( parentNode && parentNode.tagName ) {
         while (parentNode.tagName && !parentNode.getAttribute('data-editor') ) {
           if ( parentNode.style.textAlign == 'center' )
-            tags.push('center')
-          else
-            tags.push(parentNode.tagName)
+            tags.push('CENTER')
+          tags.push(parentNode.tagName)
           parentNode = parentNode.parentNode
         }
       }
@@ -382,19 +403,25 @@ module.exports = React.createClass({
     return this.transferPropsTo(
       <div className="aino-editor" style={{ position: 'relative' }}>
         <div className={toolbarClasses.join(' ')} ref="toolbar" onClick={this.onToolbarClick} style={toolbarStyles}>
-          <button className={"bold"+isActive('b')} data-action="bold">B</button>
-          <button className={"italic"+isActive('i')} data-action="italic">i</button>
-          <button className={"h1"+isActive('h1')} data-action="h1">h1</button>
-          <button className={"h2"+isActive('h2')} data-action="h2">h2</button>
-          <button className={"h3"+isActive('h3')} data-action="h3">h3</button>
-          <button className={"center"+isActive('center')} data-action="justifycenter">+</button>
-          <button className={"list"+isActive('li')} data-action="insertunorderedlist">li</button>
-          <button className={"link"+isActive('a')} data-link>a</button>
+          <button className={"bold"+isActive('b')} data-action="bold"><i className="fa fa-bold"></i></button>
+          <button className={"italic"+isActive('i')} data-action="italic"><i className="fa fa-italic"></i></button>
+          <button className={"h1"+isActive('h1')} data-action="h1"><i className="fa fa-header"></i><small>1</small></button>
+          <button className={"h2"+isActive('h2')} data-action="h2"><i className="fa fa-header"></i><small>2</small></button>
+          <button className={"h3"+isActive('h3')} data-action="h3"><i className="fa fa-header"></i><small>3</small></button>
+          <button className={"center"+isActive('center')} data-action="justifycenter"><i className="fa fa-align-center"></i></button>
+          <button className={"list"+isActive('li')} data-action="insertunorderedlist"><i className="fa fa-list-ul"></i></button>
+          <button className={"link"+isActive('a')} data-link><i className="fa fa-link"></i></button>
           <span className="arr" style={arrowStyles}/>
           <div className="linkinput" style={linkinputStyles}>
             <input type="text" ref="linkinput" onInput={this.onLinkinputChange} onKeyUp={this.onLinkinputKeyUp} placeholder="Paste or type a link" />
             <span className="close" />
           </div>
+        </div>
+        <div className="inject" style={injectStyles}>
+          <button onClick={this.insertImage}><i className="fa fa-image" /></button>
+          <button onClick={this.insertYoutube}><i className="fa fa-youtube-play" /></button>
+          <button onClick={this.insertVimeo}><i className="fa fa-vimeo-square" /></button>
+          <span className="arr" />
         </div>
         {editor}
       </div>

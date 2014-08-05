@@ -106,7 +106,8 @@ module.exports = React.createClass({
       arrowTop: 0,
       toolbarBelow: false,
       toolbarMode: 'default',
-      linkMode: false
+      linkMode: false,
+      injectMode: false
     }
   },
 
@@ -124,6 +125,13 @@ module.exports = React.createClass({
         return
       else
         this.createLink()
+    }
+
+    if( e && this.state.injectMode ) {
+      if ( e.target == this.refs.injectinput.getDOMNode() )
+        return
+      else
+        this.resetInject()
     }
 
     // tick the selection check
@@ -342,6 +350,28 @@ module.exports = React.createClass({
     if ( e.which == 13 )
       this.createLink()
   },
+  onInjectinputKeyUp: function(e) {
+    if ( e.which == 13 )
+      this.execInject(e.target.value)
+  },
+  inject: function(type) {
+    return function() {
+      saveSelection()
+      this.setState({ injectMode: type })
+      setTimeout(function() {
+        this.refs.injectinput.getDOMNode().focus()
+      }.bind(this), 4)
+    }.bind(this)
+  },
+  execInject: function(url) {
+    console.log('Inject: '+url)
+    this.resetInject()
+  },
+  resetInject: function() {
+    this.refs.injectinput.getDOMNode().value = ''
+    this.setState({ injectMode: false })
+    restoreSelection()
+  },
   execFormat: function(action) {
     var selectionElement = getBlockElement(this.selection.anchorNode)
     if ( blockTags.indexOf(action) != -1 ) {
@@ -378,6 +408,9 @@ module.exports = React.createClass({
       left: this.state.arrowLeft
     }
     var injectStyles = this.state.injectStyles
+    var injectClasses = ['inject']
+    if ( this.state.injectMode )
+      injectClasses.push('input', this.state.injectMode)
     var toolbarClasses = ['toolbar'].concat([this.state.toolbarMode])
     if ( this.state.linkMode )
       toolbarClasses.push('link')
@@ -417,11 +450,13 @@ module.exports = React.createClass({
             <span className="close" />
           </div>
         </div>
-        <div className="inject" style={injectStyles}>
-          <button onClick={this.insertImage}><i className="fa fa-image" /></button>
-          <button onClick={this.insertYoutube}><i className="fa fa-youtube-play" /></button>
-          <button onClick={this.insertVimeo}><i className="fa fa-vimeo-square" /></button>
+        <div className={injectClasses.join(' ')} style={injectStyles}>
+          <button onClick={this.inject('image')}><i className="fa fa-image" /></button>
+          <button onClick={this.inject('youtube')}><i className="fa fa-youtube-play" /></button>
           <span className="arr" />
+          <div className="injectinput">
+            <input type="text" ref="injectinput" onKeyUp={this.onInjectinputKeyUp} placeholder={"Insert "+this.state.injectMode+" URL and press enter"} />
+          </div>
         </div>
         {editor}
       </div>

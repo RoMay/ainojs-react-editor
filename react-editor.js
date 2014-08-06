@@ -152,11 +152,12 @@ module.exports = React.createClass({
           var cursor = getSelectionStart()
           if ( cursor && cursor.nodeName == 'P' && /^\s*(<br>)?\s*$/.test(cursor.innerHTML) ) {
             var pos = cursor.getBoundingClientRect()
+            var rect = this.getElement().getBoundingClientRect()
             this.setState({
               injectStyles: {
                 display: 'block',
-                top: pos.top,
-                left: pos.left
+                top: pos.top - rect.top,
+                left: pos.left - rect.left
               }
             })
           } else {
@@ -205,6 +206,10 @@ module.exports = React.createClass({
 
     this.setState({
       toolbarMode: reg.test(start.nodeName) || reg.test(end.nodeName) ? 'heading' : 'default' 
+    })
+
+    this.setState({ 
+      injectStyles: { display: 'none' }
     })
       
     var pos = this.getToolbarPosition()

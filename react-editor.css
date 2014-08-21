@@ -147,3 +147,5 @@
   border-width: 6px 7px 0 7px;
   border-color: #5dbda3 transparent transparent transparent;
 }
+
+.aino-editor .static.selected{outline:2px solid #ff4;}

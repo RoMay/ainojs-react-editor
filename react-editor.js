@@ -57,10 +57,13 @@ var selectionInEditor = function() {
   return node !== document
 }
 
-var insertNode = function(nodeType) {
+var insertNode = function(node, replace) {
   var selection = document.getSelection()
+  if ( replace ) {
+    var currentNode = getSelectionStart()
+    currentNode.parentNode.removeChild(currentNode)
+  }
   var range = selection.getRangeAt(0)
-  var node = document.createElement(nodeType)
   range.insertNode(node)
   range.collapse(false)
   selection.removeAllRanges()
@@ -115,10 +118,26 @@ module.exports = React.createClass({
   getElement: function() {
     return this.refs.editor.getDOMNode()
   },
+  selectStatic: function(node) {
+    this.getElement().blur()
+    node.classList.add('selected')
+  },
   checkSelection: function(e) {
+
+    if ( e && e.type == 'mouseup' ) {
+      var container = e.target.parentNode.parentNode
+      if ( container.getAttribute('data-static') ) {
+        this.selectStatic(container)
+        return
+      }
+    }
 
     var newSelection
     var selectionElement
+
+    Array.prototype.forEach.call(this.getElement().querySelectorAll('*[data-static]'), function(node) {
+      node.classList.remove('selected')
+    })
 
     if( e && this.state.linkMode ) {
       if ( e.target == this.refs.linkinput.getDOMNode() )
@@ -149,7 +168,14 @@ module.exports = React.createClass({
         }
 
         if ( !newSelection.toString().trim() && selectionInEditor() ) {
+
           var cursor = getSelectionStart()
+          var parent = cursor.parentNode
+          if (parent.getAttribute('data-static')) {
+            this.selectStatic(parent)
+            return
+          }
+
           if ( cursor && cursor.nodeName == 'P' && /^\s*(<br>)?\s*$/.test(cursor.innerHTML) ) {
             var pos = cursor.getBoundingClientRect()
             var rect = this.getElement().getBoundingClientRect()
@@ -295,7 +321,7 @@ module.exports = React.createClass({
     // fix safari’s line breaks
     if ( Detect.safari && e.which == 13 && e.shiftKey ) {
       e.preventDefault()
-      var br = insertNode('br')
+      var br = insertNode(document.createElement('br'))
       var last = br.parentNode.lastChild
       if ( last.nodeType == 3 && last.textContent === '' )
         last = last.previousSibling
@@ -369,7 +395,30 @@ module.exports = React.createClass({
     }.bind(this)
   },
   execInject: function(url) {
-    console.log('Inject: '+url)
+    if ( this.state.injectMode == 'image' ) {
+      var image = new Image()
+      var holder = document.createElement('div')
+      holder.className = 'image'
+      var container = document.createElement('div')
+      container.className = 'image-container static'
+      container.setAttribute('data-static', 'true')
+      container.setAttribute('data-static-type', 'image')
+      container.appendChild(holder)
+      holder.appendChild(image)
+      image.onload = function(e) {
+        var ratio = 
+        holder.style.paddingBottom = ( (this.height/this.width)*100 )+'%'
+        holder.style.height = 0
+        container.style.maxWidth = this.width+'px'
+        this.style.position = 'absolute'
+        this.style.maxWidth = '100%'
+        insertNode(container, true)
+      }
+      image.onerror = function() {
+        console.log('Image not found')
+      }
+      image.src = url
+    }
     this.resetInject()
   },
   resetInject: function() {

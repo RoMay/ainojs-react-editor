@@ -48,6 +48,15 @@ var getSelectionStart = function() {
   return node && node.nodeType === 3 ? node.parentNode : node
 }
 
+var setCaretAt = function(node) {
+  var range = document.createRange()
+  range.selectNodeContents(node)
+  range.collapse(false)
+  var sel = window.getSelection()
+  sel.removeAllRanges()
+  sel.addRange(range)
+}
+
 var selectionInEditor = function() {
   var node = getSelectionStart()
   if ( !node )
@@ -109,6 +118,7 @@ module.exports = React.createClass({
       arrowTop: 0,
       toolbarBelow: false,
       toolbarMode: 'default',
+      staticSelected: null,
       linkMode: false,
       injectMode: false
     }
@@ -119,14 +129,20 @@ module.exports = React.createClass({
     return this.refs.editor.getDOMNode()
   },
   selectStatic: function(node) {
+    console.log(this.state.staticSelected, node)
+    if ( this.state.staticSelected === node )
+      return
     this.getElement().blur()
     node.classList.add('selected')
+    this.setState({
+      staticSelected: node
+    })
   },
   checkSelection: function(e) {
 
     if ( e && e.type == 'mouseup' ) {
       var container = e.target.parentNode.parentNode
-      if ( container.getAttribute('data-static') ) {
+      if ( container && ('getAttribute' in container) && container.getAttribute('data-static') ) {
         this.selectStatic(container)
         return
       }
@@ -138,6 +154,8 @@ module.exports = React.createClass({
     Array.prototype.forEach.call(this.getElement().querySelectorAll('*[data-static]'), function(node) {
       node.classList.remove('selected')
     })
+
+    this.setState({ staticSelected: null })
 
     if( e && this.state.linkMode ) {
       if ( e.target == this.refs.linkinput.getDOMNode() )
@@ -307,6 +325,11 @@ module.exports = React.createClass({
       document.execCommand('formatBlock', false, 'p')
       if ( node.tagName == 'A' )
         document.execCommand('unlink', false, null)
+    }
+    var s = this.state.staticSelected
+    if ( ( e.which == 38 || e.which == 40 ) && s ) {
+      if ( e.which == 38 && s.previousSibling )
+        setCaretAt(s.previousSibling)
     }
     this.checkSelection()
   },

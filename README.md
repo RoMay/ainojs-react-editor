@@ -6,7 +6,7 @@ A medium-inspired editor written as a React component.
 Installation:
 -------------
 
-    npm install ainojs-editor
+    npm install ainojs-react-editor
 
 Usage example:
 

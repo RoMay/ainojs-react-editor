@@ -130,6 +130,7 @@ module.exports = React.createClass({
   },
   selectStatic: function(node) {
     console.log(this.state.staticSelected, node)
+    if(!this.isMounted()) return;
     if ( this.state.staticSelected === node )
       return
     this.getElement().blur()
@@ -154,6 +155,8 @@ module.exports = React.createClass({
     Array.prototype.forEach.call(this.getElement().querySelectorAll('*[data-static]'), function(node) {
       node.classList.remove('selected')
     })
+
+    if(!this.isMounted()) return;
 
     this.setState({ staticSelected: null })
 
@@ -197,6 +200,7 @@ module.exports = React.createClass({
           if ( cursor && cursor.nodeName == 'P' && /^\s*(<br>)?\s*$/.test(cursor.innerHTML) ) {
             var pos = cursor.getBoundingClientRect()
             var rect = this.getElement().getBoundingClientRect()
+            if(!this.isMounted()) return;
             this.setState({
               injectStyles: {
                 display: 'block',
@@ -205,6 +209,7 @@ module.exports = React.createClass({
               }
             })
           } else {
+            if(!this.isMounted()) return;
             this.setState({ injectStyles: { display: 'none' } })
           }
         }
@@ -226,7 +231,7 @@ module.exports = React.createClass({
       document.execCommand('unlink', false, null)
   },
   componentDidMount: function() {
-
+    if(!this.isMounted()) return;
     var node = this.getElement()
     var html = this.props.html || ''
     node.innerHTML = html
@@ -234,22 +239,24 @@ module.exports = React.createClass({
 
     document.documentElement.addEventListener('mouseup', this.checkSelection)
   },
-  componentWillUnmount: function() {s
+  componentWillUnmount: function() {
     document.documentElement.removeEventListener('mouseup', this.checkSelection)
   },
   hideToolbar: function() {
+    if(!this.isMounted()) return;
     this.setState({
       toolStyles: { display: 'none' }
     })
   },
   showToolbar: function() {
+    if(!this.isMounted()) return;
 
     var start = getBlockElement(document.getSelection().anchorNode)
     var end = getBlockElement(document.getSelection().focusNode)
     var reg = /^(H1|H2|H3|H4|H5|H6)$/
 
     this.setState({
-      toolbarMode: reg.test(start.nodeName) || reg.test(end.nodeName) ? 'heading' : 'default' 
+      toolbarMode: (start && reg.test(start.nodeName)) || (end && reg.test(end.nodeName)) ? 'heading' : 'default' 
     })
 
     this.setState({ 
@@ -269,6 +276,7 @@ module.exports = React.createClass({
     })
   },
   getToolbarDimensions: function() {
+    if(!this.isMounted()) return;
     this.setState({
       toolStyles: extend( this.state.toolStyles, { opacity: 0, display: 'block' })
     })
@@ -294,6 +302,8 @@ module.exports = React.createClass({
 
     if ( center-cleft < -cleft )
       arrDiff = center
+
+    if(!this.isMounted()) return;
 
     this.setState({ toolbarBelow: isUnder })
 
@@ -356,6 +366,7 @@ module.exports = React.createClass({
   },
   onChange: function() {
     var html = this.getElement().innerHTML
+    if(!this.isMounted()) return;
     if ( html != this.state.html ) {
       this.setState({ html: html })
       typeof this.props.onChange == 'function' && this.props.onChange(html)
@@ -372,6 +383,8 @@ module.exports = React.createClass({
     document.execCommand('insertHTML', false, toHTML(content))
   },
   onToolbarClick: function(e) {
+    if(!this.isMounted()) return;
+
     var target = e.target.nodeName == 'BUTTON' ? e.target : e.target.parentNode
     var action = target.getAttribute('data-action')
     if ( action )
@@ -410,12 +423,15 @@ module.exports = React.createClass({
   },
   inject: function(type) {
     return function() {
+      if(!this.isMounted()) return;
       saveSelection()
-      this.setState({ injectMode: type })
-      setTimeout(function() {
-        this.refs.injectinput.getDOMNode().focus()
-      }.bind(this), 4)
-    }.bind(this)
+      
+        this.setState({ injectMode: type })
+        setTimeout(function() {
+          if(!this.isMounted()) return;
+          this.refs.injectinput.getDOMNode().focus()
+        }.bind(this), 4)
+      }.bind(this)
   },
   execInject: function(url) {
     if ( this.state.injectMode == 'image' ) {
@@ -445,8 +461,11 @@ module.exports = React.createClass({
     this.resetInject()
   },
   resetInject: function() {
-    this.refs.injectinput.getDOMNode().value = ''
-    this.setState({ injectMode: false })
+    this.refs.injectinput.getDOMNode().value = '';
+    if(this.isMounted()) {
+      this.setState({ injectMode: false })  
+    }
+    
     restoreSelection()
   },
   execFormat: function(action) {

@@ -176,7 +176,7 @@ module.exports = React.createClass({
 
     // tick the selection check
     setTimeout(function() {
-      
+      console.log('setTimeout');
       if ( !this.state.linkMode ) {
 
         newSelection = document.getSelection()
@@ -404,6 +404,7 @@ module.exports = React.createClass({
         }
       })
       setTimeout(function() {
+        console.log('onToolbarClick');
         var anchor = this.refs.linkinput.getDOMNode()
         anchor.value = linkinputValue
         anchor.focus()
@@ -471,7 +472,7 @@ module.exports = React.createClass({
   execFormat: function(action) {
     var selectionElement = getBlockElement(this.selection.anchorNode)
     if ( blockTags.indexOf(action) != -1 ) {
-      if (selectionElement.tagName === action.toUpperCase())
+      if (selectionElement && selectionElement.tagName === action.toUpperCase())
         action = 'p'
       document.execCommand('formatBlock', false, action)
     }

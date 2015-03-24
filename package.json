@@ -18,7 +18,7 @@
   "author": "Aino",
   "devDependencies": {
     "envify": "^1.2.1",
-    "react": "latest"
+    "react": "~0.12.1"
   },
   "dependencies": {
     "ainojs-detect": "latest",
